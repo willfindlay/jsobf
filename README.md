@@ -1,8 +1,8 @@
 # jsobf - The JSON Obfuscator
 
 `jsobf` is an obfuscator for JSON documents that completely randomizes keys and
-values, but preserves **the original structure** of the JSON document and the
-**original mapping** of keys and values.
+values, but preserves **the original structure** (but not necessarily key order)
+of the JSON document and the **original mapping** of keys and values.
 
 Why build `jsobf`? I wanted to obfuscate some sensitive JSON data but there was
 no simple CLI tool for it that I could trust.
