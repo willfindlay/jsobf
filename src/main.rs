@@ -7,30 +7,44 @@ use std::{collections::HashMap, fs::File, io::stdin, path::PathBuf};
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
-    /// File containing JSON to obfuscate. Can be set to `-` to use STDIN.
+    /// File containing JSON to obfuscate. Can be set to a single `-` to use STDIN.
     #[arg(value_name = "JSON_FILE")]
-    file: PathBuf,
+    files: Vec<PathBuf>,
     /// Should the output be pretty
     #[arg(long)]
     pretty: bool,
     /// Show key mapping in output
     #[arg(long = "show-keys")]
     show_keys: bool,
+    /// Show value mapping in output
+    #[arg(long = "show-values")]
+    show_values: bool,
 }
 
-fn obfuscate(value: &Value, known_keys: &mut HashMap<String, String>) -> Value {
+fn obfuscate(
+    value: &Value,
+    known_keys: &mut HashMap<String, String>,
+    known_values: &mut HashMap<Value, Value>,
+) -> Value {
+    if let Some(v) = known_values.get(value) {
+        return v.clone();
+    }
     match value {
         Value::Null => value.clone(),
-        Value::Bool(_) => Value::Bool(obfuscate_bool()),
-        Value::Number(number) => Value::Number(obfuscate_number(number)),
-        Value::String(s) => Value::String(obfuscate_string(s.len())),
-        Value::Array(vec) => Value::Array(obfuscate_vec(vec, known_keys)),
-        Value::Object(map) => Value::Object(obfuscate_obj(map, known_keys)),
+        Value::Bool(b) => Value::Bool(*b),
+        Value::Number(number) => {
+            let n = Value::Number(obfuscate_number(number));
+            known_values.insert(value.clone(), n.clone());
+            n
+        }
+        Value::String(s) => {
+            let s = Value::String(obfuscate_string(s.len()));
+            known_values.insert(value.clone(), s.clone());
+            s
+        }
+        Value::Array(vec) => Value::Array(obfuscate_vec(vec, known_keys, known_values)),
+        Value::Object(map) => Value::Object(obfuscate_obj(map, known_keys, known_values)),
     }
-}
-
-fn obfuscate_bool() -> bool {
-    rand::random()
 }
 
 fn obfuscate_number(number: &Number) -> Number {
@@ -52,14 +66,18 @@ fn obfuscate_string(n: usize) -> String {
     thread_rng()
         .sample_iter(&rand::distributions::Alphanumeric)
         .take(n)
-        .map(char::from) // From link above, this is needed in later versions
+        .map(char::from)
         .collect()
 }
 
-fn obfuscate_vec(v: &Vec<Value>, known_keys: &mut HashMap<String, String>) -> Vec<Value> {
+fn obfuscate_vec(
+    v: &Vec<Value>,
+    known_keys: &mut HashMap<String, String>,
+    known_values: &mut HashMap<Value, Value>,
+) -> Vec<Value> {
     let mut out = Vec::with_capacity(v.capacity());
     for val in v {
-        out.push(obfuscate(val, known_keys));
+        out.push(obfuscate(val, known_keys, known_values));
     }
     out
 }
@@ -67,6 +85,7 @@ fn obfuscate_vec(v: &Vec<Value>, known_keys: &mut HashMap<String, String>) -> Ve
 fn obfuscate_obj(
     m: &Map<String, Value>,
     known_keys: &mut HashMap<String, String>,
+    known_values: &mut HashMap<Value, Value>,
 ) -> Map<String, Value> {
     let mut out = Map::new();
     for (k, v) in m {
@@ -76,7 +95,7 @@ fn obfuscate_obj(
             obfuscate_string(k.len())
         };
         known_keys.insert(k.clone(), nk.clone());
-        let nv = obfuscate(v, known_keys);
+        let nv = obfuscate(v, known_keys, known_values);
         out.insert(nk, nv);
     }
     out
@@ -85,14 +104,22 @@ fn obfuscate_obj(
 fn main() -> anyhow::Result<()> {
     let cli = Cli::try_parse()?;
 
-    let parsed: Result<Value, _> = if cli.file.to_str() == Some("-") {
-        serde_json::from_reader(stdin())
-    } else {
-        serde_json::from_reader(File::open(cli.file)?)
-    };
+    let parsed: Result<Vec<Value>, _> =
+        if cli.files.len() == 1 && cli.files[0].to_str() == Some("-") {
+            let de = serde_json::Deserializer::from_reader(stdin());
+            de.into_iter().collect()
+        } else {
+            let mut res = Vec::with_capacity(cli.files.len());
+            for f in cli.files {
+                res.push(serde_json::from_reader(File::open(f)?))
+            }
+            res.into_iter().collect()
+        };
+    let parsed = parsed?;
 
     let mut known_keys = HashMap::new();
-    let out = obfuscate(&parsed?, &mut known_keys);
+    let mut known_values = HashMap::new();
+    let out = obfuscate_vec(&parsed, &mut known_keys, &mut known_values);
 
     if cli.show_keys {
         for (k, v) in known_keys {
@@ -101,10 +128,21 @@ fn main() -> anyhow::Result<()> {
         println!("-----");
     }
 
+    if cli.show_values {
+        for (k, v) in known_values {
+            println!("{:?}: {:?}", k, v);
+        }
+        println!("-----");
+    }
+
     if cli.pretty {
-        println!("{}", serde_json::to_string_pretty(&out)?)
+        for v in out {
+            println!("{}", serde_json::to_string_pretty(&v)?)
+        }
     } else {
-        println!("{}", serde_json::to_string(&out)?)
+        for v in out {
+            println!("{}", serde_json::to_string(&v)?)
+        }
     }
 
     Ok(())
