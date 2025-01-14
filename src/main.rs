@@ -8,7 +8,7 @@ use std::{collections::HashMap, fs::File, io::stdin, path::PathBuf};
 #[command(version, about, long_about = None)]
 struct Cli {
     /// Files containing JSON to obfuscate. Can be set to a single `-` to use STDIN.
-    #[arg(value_name = "JSON_FILE")]
+    #[arg(value_name = "JSON_FILE", required = true)]
     files: Vec<PathBuf>,
     /// Should the output be pretty
     #[arg(long)]
@@ -102,7 +102,7 @@ fn obfuscate_obj(
 }
 
 fn main() -> anyhow::Result<()> {
-    let cli = Cli::try_parse()?;
+    let cli = Cli::parse();
 
     let parsed: Result<Vec<Value>, _> =
         if cli.files.len() == 1 && cli.files[0].to_str() == Some("-") {
