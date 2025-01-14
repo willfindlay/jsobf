@@ -2,6 +2,11 @@
 name = "jsobf"
 version = "0.1.0"
 edition = "2021"
+description = "CLI JSON Obfuscator"
+license = "MIT"
+license-file = "LICENSE"
+homepage = "https://github.com/willfindlay/jsobf"
+repository = "https://github.com/willfindlay/jsobf"
 
 [dependencies]
 anyhow = "1.0.95"
