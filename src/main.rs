@@ -7,7 +7,7 @@ use std::{collections::HashMap, fs::File, io::stdin, path::PathBuf};
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
-    /// File containing JSON to obfuscate. Can be set to a single `-` to use STDIN.
+    /// Files containing JSON to obfuscate. Can be set to a single `-` to use STDIN.
     #[arg(value_name = "JSON_FILE")]
     files: Vec<PathBuf>,
     /// Should the output be pretty
@@ -49,11 +49,11 @@ fn obfuscate(
 
 fn obfuscate_number(number: &Number) -> Number {
     if number.is_u64() {
-        let n: u128 = rand::random();
-        Number::from_u128(n).expect("should convert")
+        let n: u64 = rand::random();
+        Number::from_u128(n as u128).expect("should convert")
     } else if number.is_i64() {
-        let n: i128 = rand::random();
-        Number::from_i128(n).expect("should convert")
+        let n: i64 = rand::random();
+        Number::from_i128(n as i128).expect("should convert")
     } else if number.is_f64() {
         let n: f64 = rand::random();
         Number::from_f64(n).expect("should convert")
